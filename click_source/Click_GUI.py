@@ -3,8 +3,9 @@
 Click_GUI - Графический интерфейс макроса Click
 Использует PyQt5 для создания окна выбора файлов и параметров.
 """
-from os import cpu_count, path as os_path, listdir
+import logging
 import time
+from os import cpu_count, path as os_path, listdir
 from pathlib import Path
 
 from PyQt5.QtWidgets import QtWidgets as pq
@@ -14,6 +15,20 @@ from concurrent.futures import ProcessPoolExecutor
 
 from Click_Rastr import create_dxf
 from Click_word import process_directory, process_directory_com
+from config import get_icon_path
+
+logger = logging.getLogger(__name__)
+
+
+def _create_dxf_safe(fn, path_grf, com_value, path_sch=None):
+    """Обёртка create_dxf с обработкой исключений."""
+    try:
+        if path_sch:
+            create_dxf(fn, path_grf, com_value, path_sch)
+        else:
+            create_dxf(fn, path_grf, com_value)
+    except Exception as e:
+        logger.exception('Ошибка при обработке %s: %s', fn, e)
 
 try:
     from Click_word_r7 import process_directory_r7
@@ -50,10 +65,7 @@ class HeavyWorker(QThread):
         with ProcessPoolExecutor(max_workers=self.max_w) as executor:
             futures = []
             for fn in self.rg2:
-                if self.path_sch:
-                    f = executor.submit(create_dxf, fn, self.path_grf, self.com_value, self.path_sch)
-                else:
-                    f = executor.submit(create_dxf, fn, self.path_grf, self.com_value)
+                f = executor.submit(_create_dxf_safe, fn, self.path_grf, self.com_value, self.path_sch)
                 futures.append(f)
             for f in futures:
                 f.result()
@@ -93,7 +105,7 @@ class HeavyWorker(QThread):
         try:
             self.finished_status.emit(execution_time)
         except Exception as e:
-            print('Ошибка: ', e)
+            logger.exception('Ошибка при завершении: %s', e)
 
     def stop(self):
         """Безопасная остановка потока."""
@@ -232,15 +244,17 @@ class FileOrDirectorySelector(pq.QWidget):
 
         self.input_widget.setLayout(layout)
         self.setWindowTitle('Click by Guriev')
-        self.setWindowIcon(QIcon('D:\\WORK\\!Загрузки\\diaphragm.ico'))
+        icon_path = get_icon_path()
+        if icon_path:
+            self.setWindowIcon(QIcon(icon_path))
 
     def update_variable(self):
         text = self.path_entry_cpu_number.text()
         try:
             self.cpu_number = int(text)
         except ValueError:
-            print('Ошибка: введите целое число')
-            self.label_cpu_number.setText(str(self.num_cpu))
+            logger.warning('Некорректное значение количества процессов')
+            self.path_entry_cpu_number.setText(str(self.num_cpu))
 
     def on_select_button_clicked_dir(self):
         dir_path = pq.QFileDialog.getExistingDirectory(self, 'Выберите папку')
@@ -363,7 +377,9 @@ class MSG(pq.QMessageBox):
 
     def init_ui(self):
         self.setWindowTitle('Click by Guriev')
-        self.setWindowIcon(QIcon('D:\\WORK\\!Загрузки\\diaphragm.ico'))
+        icon_path = get_icon_path()
+        if icon_path:
+            self.setWindowIcon(QIcon(icon_path))
         self.setText(f'Работа макроса завершена!\nВремя выполнения: {self.execution_time:.4f} минут')
         self.setIcon(pq.QMessageBox.Information)
         self.setStandardButtons(pq.QMessageBox.Ok)

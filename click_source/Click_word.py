@@ -3,11 +3,19 @@
 Click_word - Вставка изображений (PNG/SVG) в документ Word.
 Поддерживает python-docx и COM Word для SVG.
 """
+import logging
 from os import path as os_path
 from pathlib import Path
 
 import win32com.client as win32
 from docx import Document
+
+from config import (
+    STYLE_HEADING_APP, STYLE_ILLUSTRATION, STYLE_ILLUSTRATION_APP,
+    STYLE_ILLUSTRATION_LAYOUT, OUTPUT_FILENAME
+)
+
+logger = logging.getLogger(__name__)
 from docx.shared import Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_ORIENTATION
@@ -53,23 +61,23 @@ def process_directory(rg2, path_wrd, format_value, position_value, text_value):
 
     for filename in filenames:
         if not os_path.exists(filename):
-            print('Не удалось добавить картинку в Word-файл')
+            logger.warning('Файл не найден, пропуск: %s', filename)
             continue
         p = doc.add_paragraph()
-        p.style = '7.32 ЗАГОЛОВОК ПРИЛОЖЕНИЙ (отображается в СОДЕРЖАНИИ'
+        p.style = STYLE_HEADING_APP
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run()
         run.add_picture(filename, width=width_cm)
         p = doc.add_paragraph()
         if text_value:
-            p.style = '7.32 Иллюстрация ПРИЛОЖЕНИЯ. Подпись к иллюстрации'
+            p.style = STYLE_ILLUSTRATION_APP
         else:
-            p.style = '7.32 Иллюстрация. Подпись к иллюстрации'
+            p.style = STYLE_ILLUSTRATION
         tire = ' / '
         p.add_run().add_text(os_path.basename(filename).replace('/', tire))
         doc.add_page_break()
 
-    word_output = os_path.join(os_path.dirname(rg2[0]), 'output.docx')
+    word_output = os_path.join(os_path.dirname(rg2[0]), OUTPUT_FILENAME)
     doc.save(word_output)
 
 
@@ -89,27 +97,27 @@ def process_directory_com(rg2, path_wrd, format_value, position_value, text_valu
 
         for filename in filenames:
             if not os_path.exists(filename):
-                print(f'Файл {filename} не найден')
+                logger.warning('Файл не найден: %s', filename)
                 continue
             selection = word_app.Selection
             selection.EndKey(Unit=6)
             inline_shape = selection.InlineShapes.AddPicture(
                 filename, LinkToFile=False, SaveWithDocument=True, Width=width_map.get((0, 0), 400)
             )
-            selection.Style = '7.32 Иллюстрация. Расположение иллюстрации'
+            selection.Style = STYLE_ILLUSTRATION_LAYOUT
             selection.InsertParagraphAfter()
             selection.MoveDown(Unit=1, Count=1)
             file_name_without_ext = Path(filename).stem
             caption_text = file_name_without_ext.replace('/', ' - ')
             selection.Text = caption_text
-            selection.Style = '7.32 Иллюстрация. Подпись к иллюстрации' if not text_value else '7.32 Иллюстрация ПРИЛОЖЕНИЯ. Подпись к иллюстрации'
+            selection.Style = STYLE_ILLUSTRATION if not text_value else STYLE_ILLUSTRATION_APP
             selection.InsertBreak(7)
 
-    word_output = os_path.join(os_path.dirname(rg2[0]), 'output.docx')
+    word_output = os_path.join(os_path.dirname(rg2[0]), OUTPUT_FILENAME)
     try:
         doc.SaveAs(str(word_output))
     except Exception as e:
-        print('Ошибка при работе с документом: ', e)
+        logger.error('Ошибка при работе с документом: %s', e)
     finally:
         doc.Close()
         word_app.Quit()
