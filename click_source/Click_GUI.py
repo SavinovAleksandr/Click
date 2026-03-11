@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QtWidgets as pq
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSettings
 from concurrent.futures import ProcessPoolExecutor
 
 from Click_Rastr import create_dxf
@@ -70,13 +70,14 @@ class HeavyWorker(QThread):
             for f in futures:
                 f.result()
 
-        if self.com_value == 'PNG':
-            process_directory(self.rg2, self.path_wrd, self.format_value,
-                             self.position_value, self.text_value)
-        elif self.use_r7 and R7_AVAILABLE:
+        if self.use_r7 and R7_AVAILABLE:
+            img_fmt = 'png' if self.com_value == 'PNG' else 'svg'
             process_directory_r7(self.rg2, self.path_wrd, self.format_value,
                                 self.position_value, self.text_value,
-                                image_format='svg')
+                                image_format=img_fmt)
+        elif self.com_value == 'PNG':
+            process_directory(self.rg2, self.path_wrd, self.format_value,
+                             self.position_value, self.text_value)
         else:
             process_directory_com(self.rg2, self.path_wrd, self.format_value,
                                  self.position_value, self.text_value)
@@ -131,9 +132,11 @@ class FileOrDirectorySelector(pq.QWidget):
         self.path_sch = None
         self.path_wrd = None
         self.num_cpu = self.num_cpu()
-        self.cpu_number = str(self.num_cpu)
+        self.cpu_number = self.num_cpu
         self.worker = None
+        self.settings = QSettings('Click', 'Guriev')
         self.init_ui()
+        self.load_settings()
 
     def init_ui(self):
         self.main_layout = pq.QVBoxLayout()
@@ -247,6 +250,63 @@ class FileOrDirectorySelector(pq.QWidget):
         icon_path = get_icon_path()
         if icon_path:
             self.setWindowIcon(QIcon(icon_path))
+
+    def load_settings(self):
+        """Загрузка сохранённых путей и настроек."""
+        path_wrd = self.settings.value('path_wrd', '')
+        path_grf = self.settings.value('path_grf', '')
+        path_sch = self.settings.value('path_sch', '')
+        rg2_text = self.settings.value('path_rg2', '')
+        if path_wrd:
+            self.path_entry_wrd.setText(path_wrd)
+            self.path_wrd = path_wrd
+        if path_grf:
+            self.path_entry_grf.setText(path_grf)
+            self.path_grf = path_grf
+        if path_sch:
+            self.path_entry_sch.setText(path_sch)
+            self.path_sch = path_sch
+        if rg2_text:
+            self.path_entry.setPlainText(rg2_text)
+            self.f_p = [p.strip() for p in rg2_text.split('\n') if p.strip()]
+        fmt = self.settings.value('format_value', 'A4')
+        if fmt in ('A4', 'A3'):
+            self.combo1.setCurrentText(fmt)
+        pos = self.settings.value('position_value', 'Книжная')
+        if pos in ('Книжная', 'Альбомная'):
+            self.combo2.setCurrentText(pos)
+        com = self.settings.value('com_value', 'SVG')
+        if com in ('SVG', 'PNG'):
+            self.combo3.setCurrentText(com)
+        self.flag_del = self.settings.value('flag_del', False, type=bool)
+        self.del_checkbox.setChecked(self.flag_del)
+        self.text_value = self.settings.value('text_value', False, type=bool)
+        self.add_checkbox.setChecked(self.text_value)
+        self.use_r7 = self.settings.value('use_r7', False, type=bool)
+        self.r7_checkbox.setChecked(self.use_r7)
+        cpu = self.settings.value('cpu_number', self.num_cpu, type=int)
+        if 1 <= cpu <= 64:
+            self.cpu_number = cpu
+            self.path_entry_cpu_number.setText(str(cpu))
+
+    def save_settings(self):
+        """Сохранение путей и настроек."""
+        self.settings.setValue('path_wrd', self.path_entry_wrd.text().strip())
+        self.settings.setValue('path_grf', self.path_entry_grf.text().strip())
+        self.settings.setValue('path_sch', self.path_entry_sch.text().strip())
+        self.settings.setValue('path_rg2', self.path_entry.toPlainText().strip())
+        self.settings.setValue('format_value', self.format_value)
+        self.settings.setValue('position_value', self.position_value)
+        self.settings.setValue('com_value', self.com_value)
+        self.settings.setValue('flag_del', self.flag_del)
+        self.settings.setValue('text_value', self.text_value)
+        self.settings.setValue('use_r7', self.use_r7)
+        self.settings.setValue('cpu_number', self.cpu_number)
+
+    def closeEvent(self, event):
+        """Сохранение настроек при закрытии окна."""
+        self.save_settings()
+        super().closeEvent(event)
 
     def update_variable(self):
         text = self.path_entry_cpu_number.text()
