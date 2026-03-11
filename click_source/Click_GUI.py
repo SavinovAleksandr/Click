@@ -281,7 +281,7 @@ class FileOrDirectorySelector(pq.QWidget):
 
     def on_select_button_clicked_wrd(self):
         file_path, _ = pq.QFileDialog.getOpenFileName(
-            self, 'Выберите файл', '', 'grf файлы (*.docx)')
+            self, 'Выберите файл', '', 'Документы Word (*.docx);;Все файлы (*)')
         if file_path:
             self.path_entry_wrd.setText(file_path)
             self.path_wrd = file_path
@@ -294,8 +294,25 @@ class FileOrDirectorySelector(pq.QWidget):
             self.path_sch = file_path
 
     def on_select_button_clicked_start(self):
-        if not self.f_p or not self.path_grf or not self.path_wrd:
+        self.path_grf = self.path_entry_grf.text().strip() or self.path_grf
+        self.path_sch = self.path_entry_sch.text().strip() or self.path_sch
+        self.path_wrd = self.path_entry_wrd.text().strip() or self.path_wrd
+        self.f_p = [p.strip() for p in self.path_entry.toPlainText().split('\n') if p.strip()]
+
+        missing = []
+        if not self.f_p:
+            missing.append('Файлы *.rg2')
+        if not self.path_grf:
+            missing.append('Файл *.grf')
+        if not self.path_wrd:
+            missing.append('Шаблон *.docx')
+        if missing:
+            pq.QMessageBox.warning(
+                self, 'Не заполнены поля',
+                'Перед запуском необходимо указать:\n\n• ' + '\n• '.join(missing)
+            )
             return
+
         self.show_loading_interface()
         self.worker = HeavyWorker(
             self.cpu_number, self.f_p, self.path_grf, self.path_sch,
@@ -306,8 +323,8 @@ class FileOrDirectorySelector(pq.QWidget):
 
     def done(self, execution_time):
         self.anim_timer.stop()
-        self.status_label.setText('✅ Готово!')
-        self.animation_label.close()
+        self.status_label.setText('Готово!')
+        self.animation_label.hide()
         msg = MSG(execution_time)
         msg.exec_()
 
