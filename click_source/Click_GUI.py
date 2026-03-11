@@ -48,11 +48,15 @@ class HeavyWorker(QThread):
         del_files = []
 
         with ProcessPoolExecutor(max_workers=self.max_w) as executor:
+            futures = []
             for fn in self.rg2:
                 if self.path_sch:
-                    executor.submit(create_dxf, fn, self.path_grf, self.com_value, self.path_sch)
+                    f = executor.submit(create_dxf, fn, self.path_grf, self.com_value, self.path_sch)
                 else:
-                    executor.submit(create_dxf, fn, self.path_grf, self.com_value)
+                    f = executor.submit(create_dxf, fn, self.path_grf, self.com_value)
+                futures.append(f)
+            for f in futures:
+                f.result()
 
         if self.com_value == 'PNG':
             process_directory(self.rg2, self.path_wrd, self.format_value,
